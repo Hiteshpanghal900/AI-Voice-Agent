@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI VOICE AGENT</title>
+    <link rel="stylesheet" href="/static/index.css">
+    <link rel="stylesheet" href="/static/bot.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
+    <!-- Bootstrap Icons CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="floating-orbs">
+            <div class="orb"></div>
+            <div class="orb"></div>
+            <div class="orb"></div>
+        </div>
+
+        
+        <div class="header">
+            <h1>AI Voice Agent</h1>
+            <p>Speak naturally and have a conversation</p>
+        </div>
+
+        <!-- Chatbox with Mic -->
+        <div class="chatbox">
+            <div class="messages" id="messages">
+                <div class="empty-state">
+                    <i class="bi bi-mic"></i>
+                    <p>Press the microphone to start speaking</p>
+                </div>
+            </div>
+            <div class="input-area">
+                <div class="mic-container">
+                    <button class="mic-btn" id="micBtn">
+                        <i class="bi bi-mic-fill"></i>
+                    </button>
+                    <div class="status-text" id="botStatus">Click to start recording</div>
+                    <button class="end-chat-btn" id="endChatBtn">End Chat</button>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- <footer>
+            <p class="murf">Powered by MurfAI</p>
+        </footer> -->
+    </div>
+
+    <script>
+        // Generate a random session_id if not present in URL
+        if (!window.location.search.includes("session_id")) {
+            const sessionId = crypto.randomUUID();
+            const newUrl = `${window.location.pathname}?session_id=${sessionId}`;
+            window.history.replaceState({}, "", newUrl);
+        }
+    </script>
+
+    <script src="/static/index.js"></script>
+    <script src="/static/bot.js"></script>
+</body>
+</html>

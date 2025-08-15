@@ -1,2 +1,4 @@
 Backend/venv
 Backend/.env
+Backend/__pycache__
+Backend/controllers/__pycache__

@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+assemblyai
+google-generativeai
