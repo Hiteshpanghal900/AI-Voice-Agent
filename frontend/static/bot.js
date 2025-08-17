@@ -10,6 +10,31 @@ let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
 let chatEnded = false;
+let socket;
+
+// Connect websocket
+function connectWebSocket(){
+  socket = new WebSocket("ws://127.0.0.1:8000/ws/audio");
+
+  socket.onopen = () => {
+    console.log("WebSocket connected");
+    botStatus.textContent = "Connected. Ready to record.";
+  };
+
+  socket.onclose = () => {
+    console.log("WebSocket closed");
+    botStatus.textContent = "Connected closed.";
+  };
+
+  socket.onerror = (err) => {
+    console.error("WebSocket error:", {err});
+    botStatus.textContent = "Error connecting to server.";
+  };
+
+  socket.onmessage = (event) => {
+    console.log("Server:", event.data)
+  };
+}
 
 // Add styles for mic button states
 function setMicRecordingState(isRecording) {
@@ -82,104 +107,66 @@ function playAudiosSequentially(audioUrls) {
   });
 }
 
-// Start recording function
-async function startRecording() {
-  if (chatEnded) return;
+// Start recording 
+async function startRecording(){
+  if(chatEnded) return;
 
-  audioChunks = [];
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.start();
-    isRecording = true;
-    setMicRecordingState(true);
-    micBtn.disabled = false;
-    endChatBtn.disabled = false;
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    mediaRecorder = new MediaRecorder(stream, {mimeType: "audio/webm"});
 
-    mediaRecorder.addEventListener("dataavailable", event => {
-      if (event.data.size > 0) audioChunks.push(event.data);
-    });
-
-    mediaRecorder.addEventListener("stop", async () => {
-      if (chatEnded) return;
-
-      const formData = new FormData();
-      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-      formData.append("audio", audioBlob, "recording.webm");
-
-      micBtn.disabled = true;
-      endChatBtn.disabled = true;
-
-      try {
-        const res = await fetch(`/agent/chat/${sessionId}`, {
-          method: "POST",
-          body: formData
-        });
-
-        if (!res.ok) {
-          throw new Error("Server error");
-        }
-
-        const result = await res.json();
-        if (result.history) {
-          messagesDiv.innerHTML = ""; // Clear all messages
-          result.history.forEach(msg => {
-            addMessage(msg.content, msg.role);
-          });
-          scrollToBottom();
-        }
-
-        if (result.audio_urls && result.audio_urls.length > 0) {
-          await playAudiosSequentially(result.audio_urls);
-        }
-      } catch (err) {
-        console.error("Error sending audio:", err);
-      } finally {
-        if (!chatEnded) {
-          micBtn.disabled = false;
-          endChatBtn.disabled = false;
-          setMicRecordingState(false);
-          // Auto start recording again after audio finished playing
-          startRecording();
-        }
-        if (botStatus) botStatus.textContent = "";
+    mediaRecorder.ondataavailable = (event) =>{
+      if(event.data.size>0 && socket.readyState == WebSocket.OPEN){
+        event.data.arrayBuffer().then(buffer => {
+          socket.send(buffer);  // send binary audio chunk
+        })
       }
-    });
+    }
 
-  } catch (err) {
-    console.error("Microphone access denied or error:", err);
-    if (botStatus) botStatus.textContent = "Microphone access denied";
-    setMicRecordingState(false);
+    mediaRecorder.start(250);
+    isRecording = true;
+    botStatus.textContent = "Recording & Streaming...";
+    micBtn.innerHTML = '<i class="bi bi-stop"></i>';
+  } catch(err){
+    console.error("Microphone access denied:", err);
+    botStatus.textContent = "Microphone access denied";
+  }
+}
+
+
+function stopRecording(){
+  if(mediaRecorder && mediaRecorder.state != "inactive"){
+    mediaRecorder.stop();
+    isRecording = false;
+    botStatus.textContent = "Stopped recording.";
+    micBtn.innerHTML = '<i class="bi bi-mic-fill"></i>'
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send("END")
+      socket.close();
+    }
   }
 }
 
 // Mic button click handler
 micBtn.addEventListener("click", () => {
-  if (chatEnded) return;
-
   if (!isRecording) {
     startRecording();
   } else {
-    mediaRecorder.stop();
-    isRecording = false;
-    setMicRecordingState(false);
+    stopRecording();
   }
 });
 
 // End chat button click handler
 endChatBtn.addEventListener("click", () => {
   chatEnded = true;
-  if (isRecording && mediaRecorder) {
-    mediaRecorder.stop();
-    isRecording = false;
+  stopRecording();
+  if (socket && socket.readyState == WebSocket.OPEN){
+    socket.close();
   }
-  micBtn.disabled = true;
-  endChatBtn.disabled = true;
-  if (botStatus) botStatus.textContent = "Chat ended.";
-  addMessage("Chat session has ended. Thank you!", "assistant");
   scrollToBottom();
 });
 
 // Initial load
-loadHistory();
+connectWebSocket();
 
