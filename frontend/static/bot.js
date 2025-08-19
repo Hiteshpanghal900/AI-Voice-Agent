@@ -112,18 +112,22 @@ async function startRecording(){
   if(chatEnded) return;
 
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-    mediaRecorder = new MediaRecorder(stream, {mimeType: "audio/webm"});
+    stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    audioContext = new AudioContext({ sampleRate: 16000 }); // force 16kHz
+    source = audioContext.createMediaStreamSource(stream);
 
-    mediaRecorder.ondataavailable = (event) =>{
-      if(event.data.size>0 && socket.readyState == WebSocket.OPEN){
-        event.data.arrayBuffer().then(buffer => {
-          socket.send(buffer);  // send binary audio chunk
-        })
-      }
-    }
+    // create a processor to grab raw audio
+    processor = audioContext.createScriptProcessor(4096, 1, 1);
+    source.connect(processor);
+    processor.connect(audioContext.destination);
 
-    mediaRecorder.start(250);
+    processor.onaudioprocess = (event) => {
+      const inputData = event.inputBuffer.getChannelData(0); // Float32
+      const pcm16 = floatTo16BitPCM(inputData);
+      const blob = new Blob([pcm16], { type: "application/octet-stream" });
+      socket.send(blob); // send raw PCM16 to backend
+    };
+
     isRecording = true;
     botStatus.textContent = "Recording & Streaming...";
     micBtn.innerHTML = '<i class="bi bi-stop"></i>';
@@ -135,17 +139,24 @@ async function startRecording(){
 
 
 function stopRecording(){
-  if(mediaRecorder && mediaRecorder.state != "inactive"){
-    mediaRecorder.stop();
-    isRecording = false;
-    botStatus.textContent = "Stopped recording.";
-    micBtn.innerHTML = '<i class="bi bi-mic-fill"></i>'
+  if (!isRecording) return;
 
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send("END")
-      socket.close();
-    }
+  if (processor) {
+      processor.disconnect();
+      processor.onaudioprocess = null;
   }
+  if (source) source.disconnect();
+  if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+  }
+  if (audioContext) audioContext.close();
+
+  // tell backend recording is finished
+  socket.send(JSON.stringify({ type: "END" }));
+
+  isRecording = false;
+  botStatus.textContent = "Stopped recording.";
+  micBtn.innerHTML = '<i class="bi bi-mic-fill"></i>'
 }
 
 // Mic button click handler
@@ -170,3 +181,13 @@ endChatBtn.addEventListener("click", () => {
 // Initial load
 connectWebSocket();
 
+function floatTo16BitPCM(float32Array) {
+    const buffer = new ArrayBuffer(float32Array.length * 2);
+    const view = new DataView(buffer);
+    let offset = 0;
+    for (let i = 0; i < float32Array.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return buffer;
+}

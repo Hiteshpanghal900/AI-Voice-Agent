@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from pathlib import Path
 import shutil
-from websocket_routes import router as ws_router
 
 
 from murf import Murf
@@ -39,6 +38,7 @@ app.mount("/static", StaticFiles(directory= os.path.join(FRONTEND_DIR, "static")
 from controllers.tts_echo import router as tts_router
 from controllers.llm_query import router as llm_router
 from controllers.agent_chat import router as agent_router
+from controllers.websocket_routes import router as ws_router
 
 app.include_router(tts_router)
 app.include_router(llm_router)
