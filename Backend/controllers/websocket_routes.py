@@ -16,6 +16,7 @@ from assemblyai.streaming.v3 import (
 import asyncio
 from dotenv import load_dotenv
 import os
+import json
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -31,9 +32,6 @@ aai.settings.api_key = os.getenv("ASSEMBLY_API_KEY")
 def on_begin(client: StreamingClient, event: BeginEvent):
     logger.info(f"AssemblyAI Session started: {event.id}")
 
-def on_turn(client: StreamingClient, event: TurnEvent):
-    # Print live transcription text
-    logger.info(f"Transcript: {event.transcript} (End of turn: {event.end_of_turn})")
 
 def on_terminated(client: StreamingClient, event: TerminationEvent):
     logger.info(f"Session terminated after {event.audio_duration_seconds} seconds")
@@ -60,6 +58,24 @@ async def websocket_endpoint(websocket: WebSocket):
         )
     )
 
+    mainLoop = asyncio.get_event_loop()
+
+    # Event handlers
+    def on_turn(client: StreamingClient, event: TurnEvent):
+        if event.turn_is_formatted:
+            logger.info({
+                "Transcript": event.transcript,
+                "EndOfTurn": event.end_of_turn
+            })
+
+            asyncio.run_coroutine_threadsafe(
+                websocket.send_text(json.dumps({
+                        "Transcript": event.transcript
+                })), 
+                mainLoop
+            )
+
+
     # Register event handlers
     client.on(StreamingEvents.Begin, on_begin)
     client.on(StreamingEvents.Turn, on_turn)
@@ -80,6 +96,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if "bytes" in data:
                 # Data is already PCM16, send directly to AssemblyAI in a thread.
                 await asyncio.to_thread(client.stream, data["bytes"])
+
             elif "text" in data and data["text"] == "END":
                 msg = data["text"]
                 logger.info(f"Text msg from received: {msg}")

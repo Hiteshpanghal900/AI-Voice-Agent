@@ -32,8 +32,15 @@ function connectWebSocket(){
   };
 
   socket.onmessage = (event) => {
-    console.log("Server:", event.data)
-  };
+    const data = JSON.parse(event.data)
+    const transcript = data.Transcript;
+    
+    try {
+        addMessage(transcript, "user");
+      } catch (addMessageError) {
+        console.error("Error calling addMessage:", addMessageError);
+      }
+    };
 }
 
 // Add styles for mic button states
@@ -54,6 +61,7 @@ function addMessage(content, role) {
   div.classList.add("message", role);
   div.textContent = content;
   messagesDiv.appendChild(div);
+  scrollToBottom();
 }
 
 function scrollToBottom() {
@@ -152,7 +160,7 @@ function stopRecording(){
   if (audioContext) audioContext.close();
 
   // tell backend recording is finished
-  socket.send(JSON.stringify({ type: "END" }));
+  socket.send(JSON.stringify({ text: "END" }));
 
   isRecording = false;
   botStatus.textContent = "Stopped recording.";
